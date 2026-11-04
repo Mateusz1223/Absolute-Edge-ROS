@@ -23,9 +23,11 @@ cleanup() {
     echo "Cleanup complete. Goodbye!"
 }
 trap cleanup SIGINT SIGTERM EXIT
-# Define standard paths
-PX4_ROOT=/home/mateusz/AbsoluteEdge/SImulationENV/PX4-Autopilot
-SOFTWARE_ROOT=/home/mateusz/AbsoluteEdge/Software/PX4
+
+# ADJUST THESE PATHS TO YOUR ENVIRONMENT!
+PX4_ROOT=~/repos/PX4-Autopilot
+WORKSPACE_ROOT=~/repos/Absolute-Edge-ROS
+Q_GROUND_CONTROL_PATH=~/QGroundControl.AppImage
 
 echo "========================================"
 echo "1. Generating Randomized HydroLab World"
@@ -54,6 +56,7 @@ echo ""
 echo "========================================"
 echo "4. Starting Micro XRCE-DDS Agent"
 echo "========================================"
+source "$WORKSPACE_ROOT/install/setup.bash"
 MicroXRCEAgent udp4 -p 8888 &
 sleep 2
 
@@ -61,36 +64,29 @@ echo ""
 echo "========================================"
 echo "5. Starting QGroundControl"
 echo "========================================"
-if [ -f ~/QGroundControl.AppImage ]; then
-    ~/QGroundControl.AppImage &
+if [ -f $Q_GROUND_CONTROL_PATH ]; then
+    $Q_GROUND_CONTROL_PATH &
 else
-    echo "WARNING: QGroundControl not found at ~/QGroundControl.AppImage"
+    echo "WARNING: QGroundControl not found at $Q_GROUND_CONTROL_PATH"
 fi
 sleep 20
 
 
 echo ""
 echo "========================================"
-echo "7. Launching OpenCV Camera Viewer"
+echo "6. Launching ROS2 mission"
 echo "========================================"
-cd "$SOFTWARE_ROOT"
-export HYDROLAB_CONFIG_DIR=/home/mateusz/AbsoluteEdge/SImulation_Hydrolab/runtime_config/hydrolab_mission
-
-# 2. FIXED PYTHON EXECUTION
+export HYDROLAB_CONFIG_DIR="$WORKSPACE_ROOT/runtime_config/hydrolab_mission"
 # Directly targeting the python engine inside the venv avoids all activation bugs!
 source /opt/ros/jazzy/setup.bash  # Change 'humble' if you use a different ROS 2 version
-source /home/mateusz/AbsoluteEdge/SImulation_Hydrolab/install/setup.bash  # Source your ROS 2 workspace (if you have one)
-
-# 2. Launch the Pilot and State Machine in the background (&)
+# Launch the ROS mission in the background (&)
 ros2 launch hydrolab_mission system_launch.py &
 
 
 echo ""
 echo "==========================================================="
 echo "✅ All systems running!"
-echo "📡 Live Camera Feed should pop up momentarily."
 echo "🛑 Press [Ctrl+C] in this terminal to shut down everything."
-echo "🚀 To take off, open a NEW terminal and run takeoff.py"
 echo "==========================================================="
 
 wait
