@@ -6,21 +6,21 @@ set -e
 # Disables itself immediately so it doesn't loop forever!
 # ==========================================
 cleanup() {
-    echo -e "\n[1/2] Sending graceful shutdown signal..."
+    GRACEFUL_SHUTDOWN_WAIT_TIME_SEC=10
     trap - SIGINT SIGTERM EXIT # Disable the trap so it doesn't loop
     
-    # 1. Ask nicely: Gracefully terminate only the processes started by this script
-    kill 0 
+    echo -e "\nSending graceful shutdown signals...\n"
+    killall px4 gz ruby MicroXRCEAgent QGroundControl 2>/dev/null || true
     
-    # Give PX4 and Gazebo 2 seconds to save their log files
-    sleep 2 
     
-    echo "[2/2] Hunting down lingering zombie processes..."
-    # 2. Force cleanup: Run a standard killall (WITHOUT the destructive -9 flag)
-    # The '2>/dev/null || true' hides ugly error messages if the processes are already dead
-    killall px4 gz ruby MicroXRCEAgent 2>/dev/null || true
+    echo -e "\nWaiting for gracefull shutdown ($GRACEFUL_SHUTDOWN_WAIT_TIME_SEC s)...\n"
+    sleep $GRACEFUL_SHUTDOWN_WAIT_TIME_SEC
     
-    echo "Cleanup complete. Goodbye!"
+    echo -e "\nForcing shutdown...\n"
+    killall -9 px4 gz ruby MicroXRCEAgent QGroundControl 2>/dev/null || true
+    
+    echo -e "Cleanup complete. Goodbye!\n"
+    kill 0
 }
 trap cleanup SIGINT SIGTERM EXIT
 
