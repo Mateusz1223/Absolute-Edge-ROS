@@ -60,17 +60,13 @@ Biblioteka `py_trees` jest dołączona do pakietu misji, nie trzeba jej instalow
 
 ## Konfiguracja skryptu startowego
 
-Skrypt `SimWorld_hydrolab/launch_envhydrolab.sh` ma wpisane ścieżki z komputera autora. Przed pierwszym uruchomieniem zmień w nim:
-
-- `PX4_ROOT` na katalog PX4-Autopilot,
-- `HYDROLAB_CONFIG_DIR` na `<repo>/runtime_config/hydrolab_mission`,
-- linię `source .../install/setup.bash` na `<repo>/install/setup.bash`.
-
-Generator świata `build_world.py` zapisuje `hydrolab_built.sdf` obok siebie i do katalogu światów PX4. Ten katalog wskaż zmienną środowiskową:
+Skrypt `SimWorld_hydrolab/launch_envhydrolab.sh` sam wylicza ścieżki repo (`HYDROLAB_CONFIG_DIR`, `install/setup.bash`) ze swojego położenia, więc nie trzeba go edytować. PX4 szuka domyślnie w `~/PX4-Autopilot`. Inne położenie podaj zmienną `PX4_ROOT`:
 
 ```bash
-export PX4_WORLDS_DIR=<PX4-Autopilot>/Tools/simulation/gz/worlds
+export PX4_ROOT=<PX4-Autopilot>
 ```
+
+Generator świata `build_world.py` zapisuje `hydrolab_built.sdf` obok siebie i do katalogu światów PX4 (domyślnie `$PX4_ROOT/Tools/simulation/gz/worlds`, można go zmienić zmienną `PX4_WORLDS_DIR`).
 
 Świat jest generowany deterministycznie, więc każde uruchomienie daje ten sam układ basenów.
 

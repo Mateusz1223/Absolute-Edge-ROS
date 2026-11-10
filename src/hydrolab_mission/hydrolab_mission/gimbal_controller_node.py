@@ -138,6 +138,10 @@ class GimbalControllerNode(Node):
         
         self.last_timer_time = self.get_clock().now()
 
+        # Gimbal manager configuration is re-sent every gimbal_configure_interval_s.
+        self.gimbal_configure_interval_s = 1.0
+        self.last_gimbal_configure_time_s = 0.0
+
         self.timer = self.create_timer(
             self.command_interval_s,
             self.timer_callback,
@@ -193,9 +197,11 @@ class GimbalControllerNode(Node):
         
         self.update_command_orientation()
 
-        if not hasattr(self, 'gimbal_configured'):
+        # Re-send the gimbal manager configuration periodically: a single message
+        # can be lost before PX4 is reachable, and PX4 then rejects every PITCHYAW.
+        if now_s - self.last_gimbal_configure_time_s >= self.gimbal_configure_interval_s:
             self.configure_gimbal_manager()
-            self.gimbal_configured = True
+            self.last_gimbal_configure_time_s = now_s
 
         self.publish_gimbal_command()
         

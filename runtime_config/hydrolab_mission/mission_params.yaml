@@ -64,7 +64,9 @@ mission_behavior_tree:
       - blue
       - yellow
     final_pool_color: yellow
-    # Pool centers in Gazebo world frame (m); match SimWorld_hydrolab/build_world.py
+    # Pool targets in PX4 local NED frame (m): x = north = Gazebo y, y = east = Gazebo x.
+    # They are approach points ~5 m before each pool along the flight path, not the pool
+    # centers from SimWorld_hydrolab/build_world.py (e.g. pool_red is at Gazebo (25, 0)).
     pool_red_x_m: 4.0
     pool_red_y_m: 20.0
     pool_green_x_m: 5.0
@@ -73,7 +75,7 @@ mission_behavior_tree:
     pool_blue_y_m: 70.0
     pool_yellow_x_m: 6.0
     pool_yellow_y_m: 95.0
-    test_mode: true
+    test_mode: false
     test_takeoff_height_m: 1.0
     test_gimbal_search_check_timeout_s: 3.0
     takeoff_height_m: 5.0
@@ -90,7 +92,7 @@ mission_behavior_tree:
     approach_slowdown_raycast_distance_m: 15.0
     approach_final_speed_raycast_distance_m: 5.0
     target_detected_timeout_s: 1.0
-    behavior_change_log_file: /home/mateusz/AbsoluteEdge/SImulation_Hydrolab/logs/behavior_changes.log
+    behavior_change_log_file: ~/.ros/hydrolab/behavior_changes.log
     capture_photo_hover_altitude_m: 4.0
     photo_taking_hover_timeout_s: 20.0
     capture_photo_velocity_tolerance_xy_m_s: 0.2

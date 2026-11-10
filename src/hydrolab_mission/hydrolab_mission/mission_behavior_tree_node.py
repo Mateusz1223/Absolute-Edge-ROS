@@ -159,7 +159,7 @@ class MissionBehaviorTree(Node):
         self.declare_parameter('target_detected_timeout_s', 1.0)
         self.declare_parameter(
             'behavior_change_log_file',
-            '/home/mateusz/AbsoluteEdge/SImulation_Hydrolab/logs/behavior_changes.log',
+            '~/.ros/hydrolab/behavior_changes.log',
         )
         self.declare_parameter(
             'pool_color_order',

@@ -2,35 +2,78 @@
 set -e
 
 # ==========================================
-# 1. FIXED CLEANUP TRAP
-# Disables itself immediately so it doesn't loop forever!
+# Paths (override with environment variables)
+#   PX4_ROOT        - PX4-Autopilot checkout        (default: ~/PX4-Autopilot)
+#   PX4_WORLDS_DIR  - where the world is installed  (default: $PX4_ROOT/Tools/simulation/gz/worlds)
+#   LAUNCH_MISSION  - 1: also start the mission, 0: simulation only (default: 1)
+#   HEADLESS        - 1: run Gazebo without GUI (handled by PX4)
+# ==========================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PX4_ROOT="${PX4_ROOT:-$HOME/PX4-Autopilot}"
+export PX4_WORLDS_DIR="${PX4_WORLDS_DIR:-$PX4_ROOT/Tools/simulation/gz/worlds}"
+LAUNCH_MISSION="${LAUNCH_MISSION:-1}"
+export HYDROLAB_CONFIG_DIR="$REPO_ROOT/runtime_config/hydrolab_mission"
+
+# ==========================================
+# Preflight checks (before anything is started)
+# ==========================================
+fail() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+[ -d "$PX4_ROOT" ] || fail "PX4-Autopilot not found at '$PX4_ROOT'. Set PX4_ROOT=<path to PX4-Autopilot>."
+[ -d "$PX4_WORLDS_DIR" ] || fail "PX4 worlds directory not found at '$PX4_WORLDS_DIR'. Set PX4_WORLDS_DIR."
+command -v MicroXRCEAgent >/dev/null || fail "MicroXRCEAgent not found in PATH (see README: Micro XRCE-DDS Agent)."
+
+if [ "$LAUNCH_MISSION" = "1" ]; then
+    [ -f /opt/ros/jazzy/setup.bash ] || fail "ROS 2 Jazzy not found in /opt/ros/jazzy."
+    [ -f "$REPO_ROOT/install/setup.bash" ] || fail "Workspace not built. Run 'colcon build --symlink-install' in $REPO_ROOT."
+    if ! python3 -c "import cv2" 2>/dev/null; then
+        fail "python3 cannot import cv2 (OpenCV). Install it with 'sudo apt install python3-opencv'.
+If it is installed, a pip NumPy 2.x in ~/.local (pulled in by PX4 Tools/setup/ubuntu.sh via pandas)
+probably shadows the system NumPy 1.x that python3-opencv is built against. Fix:
+  python3 -m pip uninstall --break-system-packages -y numpy pandas && sudo apt install -y python3-pandas"
+    fi
+fi
+
+if pgrep -x px4 >/dev/null || pgrep -f "gz sim" >/dev/null || pgrep -x MicroXRCEAgent >/dev/null; then
+    fail "A previous simulation is still running (px4 / gz sim / MicroXRCEAgent).
+Two Gazebo servers with the same world interfere with each other. Stop it first:
+  killall -9 px4 gz ruby MicroXRCEAgent"
+fi
+
+# ==========================================
+# Cleanup: stop everything started by this script on Ctrl+C / exit
 # ==========================================
 cleanup() {
     echo -e "\n[1/2] Sending graceful shutdown signal..."
-    trap - SIGINT SIGTERM EXIT # Disable the trap so it doesn't loop
-    
-    # 1. Ask nicely: Gracefully terminate only the processes started by this script
-    kill 0 
-    
+    trap - SIGINT EXIT # Disable the trap so it doesn't loop
+    trap '' SIGTERM    # Survive our own 'kill 0' so the steps below still run
+
+    # Gracefully terminate the processes started by this script (whole process group)
+    kill 0
+
     # Give PX4 and Gazebo 2 seconds to save their log files
-    sleep 2 
-    
-    echo "[2/2] Hunting down lingering zombie processes..."
-    # 2. Force cleanup: Run a standard killall (WITHOUT the destructive -9 flag)
-    # The '2>/dev/null || true' hides ugly error messages if the processes are already dead
+    sleep 2
+
+    echo "[2/2] Hunting down lingering processes..."
     killall px4 gz ruby MicroXRCEAgent 2>/dev/null || true
-    
+    sleep 1
+    # The Gazebo server sometimes ignores SIGTERM; a leftover one breaks the next run.
+    pkill -9 -x px4 2>/dev/null || true
+    pkill -9 -f "gz sim" 2>/dev/null || true
+    pkill -9 -x MicroXRCEAgent 2>/dev/null || true
+
     echo "Cleanup complete. Goodbye!"
 }
 trap cleanup SIGINT SIGTERM EXIT
-# Define standard paths
-PX4_ROOT=/home/mateusz/AbsoluteEdge/SImulationENV/PX4-Autopilot
-SOFTWARE_ROOT=/home/mateusz/AbsoluteEdge/Software/PX4
 
 echo "========================================"
-echo "1. Generating Randomized HydroLab World"
+echo "1. Generating HydroLab World"
 echo "========================================"
-python3 build_world.py
+python3 "$SCRIPT_DIR/build_world.py"
 
 echo ""
 echo "========================================"
@@ -39,15 +82,23 @@ echo "========================================"
 export PX4_GZ_WORLD=hydrolab_built
 # x,y,z,roll,pitch,yaw — on start_base pad (top z=0.1 m; x500 legs ~0.012 m above spawn origin)
 export PX4_GZ_MODEL_POSE="0,0,0.1,0,0,0"
+# The x500 airframe defaults to NAV_DLL_ACT=2, which blocks arming without a
+# ground station ("Preflight Fail: No connection to the GCS"). Disable it so
+# QGroundControl is optional. PX4 applies PX4_PARAM_* variables at startup.
+export PX4_PARAM_NAV_DLL_ACT="${PX4_PARAM_NAV_DLL_ACT:-0}"
+echo "PX4_ROOT is set to: $PX4_ROOT"
 echo "PX4_GZ_WORLD is set to: $PX4_GZ_WORLD"
 echo "PX4_GZ_MODEL_POSE is set to: $PX4_GZ_MODEL_POSE"
+echo "HYDROLAB_CONFIG_DIR is set to: $HYDROLAB_CONFIG_DIR"
 
 echo ""
 echo "========================================"
 echo "3. Launching PX4 SITL and Gazebo"
 echo "========================================"
 cd "$PX4_ROOT"
-make px4_sitl gz_x500_gimbal &
+# Background jobs in a script get /dev/null as stdin; the PX4 shell (pxh) then
+# hits EOF and redraws its prompt in a busy loop. Feed it a pipe that never closes.
+sleep infinity | make px4_sitl gz_x500_gimbal &
 sleep 20
 
 echo ""
@@ -59,38 +110,34 @@ sleep 2
 
 echo ""
 echo "========================================"
-echo "5. Starting QGroundControl"
+echo "5. Starting QGroundControl (optional)"
 echo "========================================"
 if [ -f ~/QGroundControl.AppImage ]; then
     ~/QGroundControl.AppImage &
+    sleep 20
 else
-    echo "WARNING: QGroundControl not found at ~/QGroundControl.AppImage"
+    echo "QGroundControl not found at ~/QGroundControl.AppImage, skipping (optional)."
 fi
-sleep 20
-
 
 echo ""
 echo "========================================"
-echo "7. Launching OpenCV Camera Viewer"
+echo "6. Launching HydroLab mission"
 echo "========================================"
-cd "$SOFTWARE_ROOT"
-export HYDROLAB_CONFIG_DIR=/home/mateusz/AbsoluteEdge/SImulation_Hydrolab/runtime_config/hydrolab_mission
-
-# 2. FIXED PYTHON EXECUTION
-# Directly targeting the python engine inside the venv avoids all activation bugs!
-source /opt/ros/jazzy/setup.bash  # Change 'humble' if you use a different ROS 2 version
-source /home/mateusz/AbsoluteEdge/SImulation_Hydrolab/install/setup.bash  # Source your ROS 2 workspace (if you have one)
-
-# 2. Launch the Pilot and State Machine in the background (&)
-ros2 launch hydrolab_mission system_launch.py &
-
+if [ "$LAUNCH_MISSION" = "1" ]; then
+    cd "$REPO_ROOT"
+    source /opt/ros/jazzy/setup.bash
+    source "$REPO_ROOT/install/setup.bash"
+    ros2 launch hydrolab_mission system_launch.py &
+else
+    echo "LAUNCH_MISSION=0: mission not started. Start it in another terminal:"
+    echo "  source /opt/ros/jazzy/setup.bash && source $REPO_ROOT/install/setup.bash"
+    echo "  ros2 launch hydrolab_mission system_launch.py config_dir:=$HYDROLAB_CONFIG_DIR"
+fi
 
 echo ""
 echo "==========================================================="
 echo "✅ All systems running!"
-echo "📡 Live Camera Feed should pop up momentarily."
 echo "🛑 Press [Ctrl+C] in this terminal to shut down everything."
-echo "🚀 To take off, open a NEW terminal and run takeoff.py"
 echo "==========================================================="
 
 wait

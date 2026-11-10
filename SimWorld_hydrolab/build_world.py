@@ -10,7 +10,7 @@ WORLD_NAME = "hydrolab_built"
 LOCAL_BASE_FILE = SCRIPT_DIR / "hydrolab_base.sdf"
 LOCAL_RANDOMIZED_FILE = SCRIPT_DIR / "hydrolab_built.sdf"
 
-DEFAULT_PX4_WORLDS_DIR = Path("/home/mateusz/AbsoluteEdge/SImulationENV/PX4-Autopilot/Tools/simulation/gz/worlds")
+DEFAULT_PX4_WORLDS_DIR = Path.home() / "PX4-Autopilot" / "Tools" / "simulation" / "gz" / "worlds"
 
 
 def create_circular_pool(
