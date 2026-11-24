@@ -9,9 +9,11 @@ TIMESTAMP=$(date +'%d-%m-%y_%H:%M:%S')
 CAPTURE_DIR="$REPO_ROOT/performance_analysis/capture_$TIMESTAMP"
 MEM_DIR="$CAPTURE_DIR/mem"
 CPU_DIR="$CAPTURE_DIR/cpu"
+FREQ_DIR="$CAPTURE_DIR/freq"
 
 mkdir -p "$MEM_DIR"
 mkdir -p "$CPU_DIR"
+mkdir -p "$FREQ_DIR"
 
 
 EXPECTED_NODES=(
@@ -36,6 +38,14 @@ declare -A NODE_EXECUTABLES=(
     ["raycasted_approach_coordinator_node"]="raycasted_approach_coordinator_node"
 )
 
+TOPICS_TO_ANALYZE=(
+    "/vision/ball_detection/result"
+)
+
+declare -A TOPIC_TO_HZ_FILE=(
+    ["/vision/ball_detection/result"]="ball_detection_result"
+)
+
 node_is_running() {
     local node="$1"
     grep -Eq "(^|/)${node}$" <<< "$NODE_LIST"
@@ -50,9 +60,19 @@ node_pid() {
 stop_capture_and_plot() {
     kill "$MEM_PID" "$CPU_PID" 2>/dev/null
     wait
+
     echo -e "Plotting results...\n"
+
     python3 "$SCRIPT_DIR/plot_performance.py" "$CAPTURE_DIR" \
         || echo -e "\nFailed to make plots automatically. Use 'plot_performance.py' to do this manually."
+
+    for topic in "${TOPICS_TO_ANALYZE[@]}"; do
+        file_name="${TOPIC_TO_HZ_FILE[$topic]}"
+
+        python3 "$SCRIPT_DIR/plot_frequency.py" --output "$CAPTURE_DIR/frequency_$file_name.png" "$FREQ_DIR/$file_name.log" \
+            || echo -e "\nFailed to make topic frequency plots automatically. Use 'plot_frequency.py' to do this manually."
+    done
+
     exit 0
 }
 
@@ -97,6 +117,14 @@ MEM_PID=$!
 pidstat "${COMMON_PID_ARGS[@]}" -u > "$CPU_DIR/pidstat.log" &
 CPU_PID=$!
 
+FREQ_PIDS=""
+for topic in "${TOPICS_TO_ANALYZE[@]}"; do
+    file_name="${TOPIC_TO_HZ_FILE[$topic]}.log"
+
+    ros2 topic hz "$topic" > "$FREQ_DIR/$file_name" &
+    FREQ_PIDS="$FREQ_PIDS $!"
+done
+
 trap stop_capture_and_plot INT TERM
 
-wait "$MEM_PID" "$CPU_PID"
+wait "$MEM_PID" "$CPU_PID" "$FREQ_PIDS"

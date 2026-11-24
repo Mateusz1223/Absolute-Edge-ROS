@@ -52,8 +52,10 @@ def main():
     parser.add_argument("--show", action="store_true", help="open the plots in windows")
     args = parser.parse_args()
 
-    cpu_series = parse_pidstat(args.capture_dir / "cpu" / "pidstat.log")
-    mem_series = parse_pidstat(args.capture_dir / "mem" / "pidstat.log")
+    capture_dir = args.capture_dir
+
+    cpu_series = parse_pidstat(capture_dir / "cpu" / "pidstat.log")
+    mem_series = parse_pidstat(capture_dir / "mem" / "pidstat.log")
 
     plot_metric(
         cpu_series,
